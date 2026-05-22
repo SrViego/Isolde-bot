@@ -13,6 +13,7 @@ const { loadData } = require('./systems/database');
 const { handleMarriageCommand } = require('./systems/marriage');
 const { handlePointsCommand } = require('./systems/points');
 const { addXpFromMessage, handleXpCommand } = require('./systems/xp');
+const { handleModerationCommand } = require('./systems/moderation');
 require('dotenv').config();
 
 const token = process.env.DISCORD_TOKEN;
@@ -65,6 +66,7 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
+  if (await handleModerationCommand(message, data)) return;
   if (handleMarriageCommand(message, data)) return;
   if (handlePointsCommand(message, data)) return;
   if (handleXpCommand(message, data)) return;

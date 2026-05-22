@@ -7,7 +7,8 @@ const dataFile = path.join(dataDir, 'database.json');
 const defaultData = {
   users: {},
   marriages: {},
-  proposals: {}
+  proposals: {},
+  warnings: {}
 };
 
 function loadData() {
@@ -39,11 +40,13 @@ function getGuildData(data, guildId) {
   if (!data.users[guildId]) data.users[guildId] = {};
   if (!data.marriages[guildId]) data.marriages[guildId] = {};
   if (!data.proposals[guildId]) data.proposals[guildId] = {};
+  if (!data.warnings[guildId]) data.warnings[guildId] = {};
 
   return {
     users: data.users[guildId],
     marriages: data.marriages[guildId],
-    proposals: data.proposals[guildId]
+    proposals: data.proposals[guildId],
+    warnings: data.warnings[guildId]
   };
 }
 

@@ -1,12 +1,8 @@
-<<<<<<< HEAD
-# Isolde-bot
-Bot de discord
-=======
-# Hallownest Bots
+# Isolde Bot
 
-Codigo basico para um bot do Discord usando Node.js e discord.js.
+Bot de Discord em Node.js usando discord.js.
 
-## Como rodar
+## Como Rodar
 
 1. Instale as dependencias:
 
@@ -20,7 +16,7 @@ npm install
 cp .env.example .env
 ```
 
-3. Coloque o token do seu bot no `.env`:
+3. Configure o `.env`:
 
 ```env
 DISCORD_TOKEN=seu_token_aqui
@@ -34,37 +30,37 @@ GOODBYE_CHANNEL_ID=id_do_canal_de_despedida
 npm start
 ```
 
-## Teste
+No Discord Developer Portal, ative `Message Content Intent` e `Server Members Intent`.
 
-Com o bot online no seu servidor, envie:
+## Comandos Basicos
 
 ```txt
 !ping
 ```
 
-Ele deve responder:
+## Musica
 
 ```txt
-Pong!
-```
-
-No portal do Discord, ative a intent `Message Content Intent` para o comando por mensagem funcionar.
-
-Para boas-vindas e despedidas, ative tambem a intent `Server Members Intent`.
-
-## Comandos
-
-```txt
-!ping
 !play link_do_youtube
 !queue
 !skip
 !stop
 ```
 
-Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube.
+Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube. O bot precisa das permissoes `Ver canal`, `Conectar` e `Falar`.
 
-## Sistemas sociais
+## Boas-vindas e Despedida
+
+Configure os IDs no `.env`:
+
+```env
+WELCOME_CHANNEL_ID=id_do_canal_de_boas_vindas
+GOODBYE_CHANNEL_ID=id_do_canal_de_despedida
+```
+
+Se os IDs nao forem configurados, o bot tenta usar o canal de sistema do servidor.
+
+## Sistemas Sociais
 
 Casamento:
 
@@ -96,4 +92,45 @@ XP por mensagem:
 ```
 
 O XP sobe automaticamente quando alguem conversa. Existe um intervalo de 60 segundos por usuario para evitar farm.
->>>>>>> ca1ccc8 (Initial Discord bot setup)
+
+## Moderacao
+
+Comandos disponiveis:
+
+```txt
+!ban @usuario motivo
+!unban id_do_usuario
+!kick @usuario motivo
+!timeout @usuario 10m motivo
+!untimeout @usuario
+!warn @usuario motivo
+!warnings
+!warnings @usuario
+!clearwarns @usuario
+!clear quantidade
+!slowmode segundos
+!lock
+!unlock
+```
+
+Permissoes que o bot pode precisar, dependendo do comando:
+
+```txt
+Banir membros
+Expulsar membros
+Moderar membros
+Gerenciar mensagens
+Gerenciar canais
+```
+
+Para ban, kick e timeout, o cargo do bot precisa estar acima do cargo da pessoa alvo.
+
+## Dados Locais
+
+Os dados de XP, pontos, avisos e casamentos ficam em:
+
+```txt
+data/database.json
+```
+
+Essa pasta fica fora do Git pelo `.gitignore`.
