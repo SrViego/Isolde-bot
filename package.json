@@ -1,0 +1,21 @@
+{
+  "name": "hallownest-bots",
+  "version": "1.0.0",
+  "description": "Bot basico para Discord.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "@discordjs/voice": "^0.17.0",
+    "opusscript": "^0.1.1",
+    "play-dl": "^1.9.7",
+    "libsodium-wrappers": "^0.7.15"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
