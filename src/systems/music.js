@@ -59,99 +59,98 @@ async function handleMusicCommand(message) {
   return false;
 }
 
+function createSong(video) {
+  return {
+    title: video.title,
+    url: video.url,
+    duration: video.durationRaw || 'ao vivo'
+  };
+}
+
+async function resolveSongs(query) {
+  if (!query) return [];
+
+  const validation = play.yt_validate(query);
+
+  try {
+    if (validation === 'video') {
+      const videoInfo = await play.video_info(query);
+      return [createSong(videoInfo.video_details)];
+    }
+
+    if (validation === 'playlist') {
+      const playlist = await play.playlist_info(query, { incomplete: true });
+      const videos = await playlist.all_videos();
+      return videos.map(createSong);
+    }
+
+    // Busca normal
+    const results = await play.search(query, { limit: 1, source: { youtube: 'video' } });
+    if (results[0]) {
+      return [createSong(results[0])];
+    }
+  } catch (error) {
+    console.error('Erro ao resolver música:', error);
+  }
+
+  return [];
+}
+
 async function addSong(message, query) {
   const voiceChannel = message.member?.voice.channel;
 
   if (!query) {
-    await message.reply('Use: !play link_ou_nome_da_musica');
-    return;
+    return message.reply('Use: `!play <link ou nome da música>`');
   }
 
   if (!voiceChannel) {
-    await message.reply('Entre em um canal de voz primeiro.');
-    return;
+    return message.reply('Você precisa estar em um canal de voz primeiro!');
   }
 
   const permissionError = await getVoicePermissionError(message, voiceChannel);
   if (permissionError) {
-    await message.reply(permissionError);
-    return;
+    return message.reply(permissionError);
   }
 
-  const song = await resolveSong(query);
-  if (!song) {
-    await message.reply('Nao encontrei essa musica no YouTube.');
-    return;
+  const songs = await resolveSongs(query);
+
+  if (songs.length === 0) {
+    return message.reply('Não consegui encontrar essa música no YouTube.');
   }
 
   const queue = getOrCreateQueue(message.guild.id, message.channel);
-  queue.songs.push(song);
 
-  await message.reply(`Adicionado na fila: **${song.title}**`);
+  queue.songs.push(...songs);
 
-  if (!queue.playing) {
-    await startQueue(message, voiceChannel, queue);
-  }
-}
-
-async function resolveSong(query) {
-  const validation = play.yt_validate(query);
-
-  if (validation === 'video') {
-    const videoInfo = await play.video_info(query).catch(() => null);
-    if (!videoInfo) return null;
-
-    return {
-      title: videoInfo.video_details.title,
-      url: videoInfo.video_details.url,
-      duration: videoInfo.video_details.durationRaw || 'ao vivo'
-    };
+  if (songs.length === 1) {
+    await message.reply(`✅ **${songs[0].title}** adicionado à fila!`);
+  } else {
+    await message.reply(`✅ Playlist com **${songs.length}** músicas adicionada à fila!`);
   }
 
-  if (validation === 'playlist') {
-    const playlist = await play.playlist_info(query, { incomplete: true }).catch(() => null);
-    const videos = playlist ? await playlist.all_videos() : [];
-    const firstVideo = videos[0];
-
-    if (!firstVideo) return null;
-
-    return {
-      title: firstVideo.title,
-      url: firstVideo.url,
-      duration: firstVideo.durationRaw || 'ao vivo'
-    };
+  // Se não estiver tocando, começa
+  if (!queue.playing && !queue.current) {
+    await startPlaying(message.guild.id, voiceChannel, queue);
   }
-
-  const results = await play.search(query, { limit: 1, source: { youtube: 'video' } }).catch(() => []);
-  const firstResult = results[0];
-
-  if (!firstResult) return null;
-
-  return {
-    title: firstResult.title,
-    url: firstResult.url,
-    duration: firstResult.durationRaw || 'ao vivo'
-  };
 }
 
 async function getVoicePermissionError(message, voiceChannel) {
-  const botMember = message.guild.members.me ?? await message.guild.members.fetchMe().catch(() => null);
-  const permissions = botMember ? voiceChannel.permissionsFor(botMember) : null;
+  const botMember = message.guild.members.me || await message.guild.members.fetchMe().catch(() => null);
+  if (!botMember) return 'Não consegui verificar minhas permissões.';
+
+  const permissions = voiceChannel.permissionsFor(botMember);
 
   if (!permissions?.has(PermissionsBitField.Flags.ViewChannel)) {
-    return 'Nao tenho permissao para ver esse canal de voz.';
+    return 'Não tenho permissão para **ver** esse canal de voz.';
   }
-
   if (!permissions.has(PermissionsBitField.Flags.Connect)) {
-    return 'Nao tenho permissao para conectar nesse canal de voz.';
+    return 'Não tenho permissão para **conectar** nesse canal de voz.';
   }
-
   if (!permissions.has(PermissionsBitField.Flags.Speak)) {
-    return 'Nao tenho permissao para falar nesse canal de voz.';
+    return 'Não tenho permissão para **falar** nesse canal de voz.';
   }
-
   if (voiceChannel.full) {
-    return 'Esse canal de voz esta cheio.';
+    return 'O canal de voz está cheio!';
   }
 
   return null;
@@ -167,15 +166,13 @@ function getOrCreateQueue(guildId, textChannel) {
       current: null,
       playing: false,
       textChannel,
-      volume: 50
+      volume: 70, // volume padrão um pouco mais alto
+      connection: null
     };
 
-    queue.player.on(AudioPlayerStatus.Idle, () => {
-      playNext(guildId);
-    });
-
+    queue.player.on(AudioPlayerStatus.Idle, () => playNext(guildId));
     queue.player.on('error', (error) => {
-      console.error('Erro no player de musica:', error);
+      console.error('Erro no player:', error);
       playNext(guildId);
     });
 
@@ -186,29 +183,36 @@ function getOrCreateQueue(guildId, textChannel) {
   return queue;
 }
 
-async function startQueue(message, voiceChannel, queue) {
-  const oldConnection = getVoiceConnection(message.guild.id);
-  if (oldConnection) oldConnection.destroy();
+async function startPlaying(guildId, voiceChannel, queue) {
+  let connection = getVoiceConnection(guildId);
 
-  const connection = joinVoiceChannel({
-    channelId: voiceChannel.id,
-    guildId: voiceChannel.guild.id,
-    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-    selfDeaf: true
-  });
+  // Se não tem conexão ou ela não está pronta, cria uma nova
+  if (!connection || connection.state.status !== VoiceConnectionStatus.Ready) {
+    if (connection) connection.destroy();
 
-  try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-  } catch (error) {
-    console.error('Erro ao entrar no canal de voz:', error);
-    connection.destroy();
-    queue.playing = false;
-    await message.reply('Nao consegui entrar no canal de voz. Confira minhas permissoes e veja o terminal.');
-    return;
+    connection = joinVoiceChannel({
+      channelId: voiceChannel.id,
+      guildId: voiceChannel.guild.id,
+      adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+      selfDeaf: true
+    });
+
+    queue.connection = connection;
+
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+    } catch (error) {
+      console.error('Erro ao conectar no canal de voz:', error);
+      connection.destroy();
+      queue.playing = false;
+      await queue.textChannel.send('❌ Não consegui entrar no canal de voz.');
+      return;
+    }
+
+    connection.subscribe(queue.player);
   }
 
-  connection.subscribe(queue.player);
-  playNext(message.guild.id);
+  playNext(guildId);
 }
 
 async function playNext(guildId) {
@@ -220,134 +224,119 @@ async function playNext(guildId) {
   if (!song) {
     queue.current = null;
     queue.playing = false;
-    getVoiceConnection(guildId)?.destroy();
+    const connection = getVoiceConnection(guildId);
+    if (connection) connection.destroy();
     musicQueues.delete(guildId);
+    await queue.textChannel.send('🎵 Fila finalizada.');
     return;
   }
 
   queue.current = song;
   queue.playing = true;
 
-  const stream = await play.stream(song.url).catch((error) => {
-    console.error('Erro ao abrir stream do YouTube:', error);
-    return null;
-  });
+  try {
+    const stream = await play.stream(song.url, {
+      quality: 2 // alta qualidade
+    });
 
-  if (!stream) {
-    queue.textChannel.send(`Nao consegui tocar: **${song.title}**`);
-    playNext(guildId);
-    return;
+    const resource = createAudioResource(stream.stream, {
+      inputType: stream.type,
+      inlineVolume: true
+    });
+
+    resource.volume?.setVolume(queue.volume / 100);
+
+    queue.player.play(resource);
+
+    await queue.textChannel.send(`▶️ **Tocando agora:** ${song.title} (${song.duration})`);
+  } catch (error) {
+    console.error(`Erro ao tocar ${song.title}:`, error);
+    await queue.textChannel.send(`❌ Erro ao tocar: **${song.title}** (pulando...)`);
+    playNext(guildId); // tenta a próxima
   }
-
-  const resource = createAudioResource(stream.stream, {
-    inputType: stream.type,
-    inlineVolume: true
-  });
-
-  resource.volume.setVolume(queue.volume / 100);
-  queue.player.play(resource);
-  await queue.textChannel.send(`Tocando agora: **${song.title}** (${song.duration})`);
 }
 
 function skipMusic(message) {
   const queue = musicQueues.get(message.guild.id);
-
-  if (!queue || !queue.playing) {
-    message.reply('Nao tem musica tocando agora.');
-    return;
-  }
+  if (!queue?.playing) return message.reply('Nenhuma música tocando no momento.');
 
   queue.player.stop();
-  message.reply('Pulando musica.');
+  message.reply('⏭️ Música pulada.');
 }
 
 function stopMusic(message) {
   const queue = musicQueues.get(message.guild.id);
-
-  if (!queue) {
-    message.reply('Nao tem musica tocando agora.');
-    return;
-  }
+  if (!queue) return message.reply('Nada tocando no momento.');
 
   queue.songs = [];
-  queue.current = null;
   queue.player.stop();
   getVoiceConnection(message.guild.id)?.destroy();
   musicQueues.delete(message.guild.id);
-  message.reply('Musica parada e fila limpa.');
+  message.reply('⏹️ Música parada e fila limpa.');
 }
 
 function showQueue(message) {
   const queue = musicQueues.get(message.guild.id);
-
   if (!queue || (!queue.current && queue.songs.length === 0)) {
-    message.reply('A fila esta vazia.');
-    return;
+    return message.reply('A fila está vazia.');
   }
 
-  const current = queue.current ? `Tocando: **${queue.current.title}**` : 'Nada tocando agora.';
-  const nextSongs = queue.songs
-    .slice(0, 10)
-    .map((song, index) => `${index + 1}. ${song.title} (${song.duration})`);
+  let response = queue.current 
+    ? `▶️ **Tocando:** ${queue.current.title}\n\n` 
+    : 'Nada tocando no momento.\n\n';
 
-  message.reply(`${current}\n\nFila:\n${nextSongs.length ? nextSongs.join('\n') : 'Sem proximas musicas.'}`);
+  if (queue.songs.length > 0) {
+    const next = queue.songs.slice(0, 10).map((song, i) => 
+      `${i+1}. ${song.title} (${song.duration})`
+    ).join('\n');
+    response += `**Próximas músicas:**\n${next}`;
+    if (queue.songs.length > 10) response += `\n... e mais ${queue.songs.length - 10} músicas`;
+  }
+
+  message.reply(response);
 }
+
 function pauseMusic(message) {
   const queue = musicQueues.get(message.guild.id);
-
-  if (!queue || !queue.playing) {
-    message.reply('Nao tem musica tocando agora.');
-    return;
-  }
+  if (!queue?.playing) return message.reply('Nada tocando.');
 
   queue.player.pause();
-  message.reply('Musica pausada.');
+  message.reply('⏸️ Música pausada.');
 }
 
 function resumeMusic(message) {
   const queue = musicQueues.get(message.guild.id);
-
-  if (!queue || !queue.playing) {
-    message.reply('Nao tem musica pausada para continuar.');
-    return;
-  }
+  if (!queue?.playing) return message.reply('Não há música pausada.');
 
   queue.player.unpause();
-  message.reply('Musica retomada.');
+  message.reply('▶️ Música retomada.');
 }
 
 function showNowPlaying(message) {
   const queue = musicQueues.get(message.guild.id);
+  if (!queue?.current) return message.reply('Nada tocando no momento.');
 
-  if (!queue?.current) {
-    message.reply('Nao tem musica tocando agora.');
-    return;
-  }
-
-  message.reply(`Tocando agora: **${queue.current.title}** (${queue.current.duration})`);
+  message.reply(`▶️ **Tocando agora:** ${queue.current.title} (${queue.current.duration})`);
 }
 
 function setVolume(message, value) {
   const queue = musicQueues.get(message.guild.id);
-  const volume = Number(value);
+  if (!queue) return message.reply('Nada tocando no momento.');
 
-  if (!queue) {
-    message.reply('Nao tem musica tocando agora.');
-    return;
-  }
-
-  if (!Number.isInteger(volume) || volume < 1 || volume > 100) {
-    message.reply('Use: !volume numero_de_1_a_100');
-    return;
+  const volume = parseInt(value);
+  if (isNaN(volume) || volume < 1 || volume > 100) {
+    return message.reply('Use: `!volume 1-100`');
   }
 
   queue.volume = volume;
-  const resource = queue.player.state.resource;
-  if (resource?.volume) resource.volume.setVolume(volume / 100);
 
-  message.reply(`Volume definido para ${volume}%.`);
+  // Aplica no som atual se estiver tocando
+  const resource = queue.player.state?.resource;
+  if (resource?.volume) {
+    resource.volume.setVolume(volume / 100);
+  }
+
+  message.reply(`🔊 Volume definido para **${volume}%**`);
 }
 
-module.exports = {
-  handleMusicCommand
-};
+module.exports = { handleMusicCommand };
