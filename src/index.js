@@ -1,4 +1,5 @@
 const { Client, Events, GatewayIntentBits } = require('discord.js');
+const { generateDependencyReport } = require('@discordjs/voice');
 const { loadData } = require('./systems/database');
 const { handleMarriageCommand } = require('./systems/marriage');
 const { handlePointsCommand } = require('./systems/points');
@@ -64,8 +65,6 @@ client.on(Events.MessageCreate, async (message) => {
   if (await handleMusicCommand(message)) return;
 });
 
-client.login(token);
-
 async function getTextChannel(guild, channelId) {
   if (channelId) {
     const channel = await guild.channels.fetch(channelId).catch(() => null);
@@ -74,3 +73,15 @@ async function getTextChannel(guild, channelId) {
 
   return guild.systemChannel?.isTextBased() ? guild.systemChannel : null;
 }
+
+(async () => {
+  const sodium = require('libsodium-wrappers');
+  await sodium.ready;
+  console.log('[voice] libsodium pronto');
+  console.log(generateDependencyReport());
+
+  await client.login(token);
+})().catch((err) => {
+  console.error('Falha ao iniciar o bot:', err);
+  process.exit(1);
+});
