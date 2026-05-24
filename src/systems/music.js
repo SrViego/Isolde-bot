@@ -84,11 +84,8 @@ async function resolveSongs(query) {
       return videos.map(createSong);
     }
 
-    // Busca normal
     const results = await play.search(query, { limit: 1, source: { youtube: 'video' } });
-    if (results[0]) {
-      return [createSong(results[0])];
-    }
+    if (results[0]) return [createSong(results[0])];
   } catch (error) {
     console.error('Erro ao resolver música:', error);
   }
@@ -128,7 +125,6 @@ async function addSong(message, query) {
     await message.reply(`✅ Playlist com **${songs.length}** músicas adicionada à fila!`);
   }
 
-  // Se não estiver tocando, começa
   if (!queue.playing && !queue.current) {
     await startPlaying(message.guild.id, voiceChannel, queue);
   }
@@ -166,7 +162,7 @@ function getOrCreateQueue(guildId, textChannel) {
       current: null,
       playing: false,
       textChannel,
-      volume: 70, // volume padrão um pouco mais alto
+      volume: 70,
       connection: null
     };
 
@@ -186,9 +182,16 @@ function getOrCreateQueue(guildId, textChannel) {
 async function startPlaying(guildId, voiceChannel, queue) {
   let connection = getVoiceConnection(guildId);
 
-  // Se não tem conexão ou ela não está pronta, cria uma nova
-  if (!connection || connection.state.status !== VoiceConnectionStatus.Ready) {
-    if (connection) connection.destroy();
+  if (connection) {
+    connection.destroy();
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  let attempts = 0;
+  const maxAttempts = 3;
+
+  while (attempts < maxAttempts) {
+    attempts++;
 
     connection = joinVoiceChannel({
       channelId: voiceChannel.id,
@@ -200,18 +203,24 @@ async function startPlaying(guildId, voiceChannel, queue) {
     queue.connection = connection;
 
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+      await entersState(connection, VoiceConnectionStatus.Ready, 60_000);
+      console.log(`✅ Conectado com sucesso no canal: ${voiceChannel.name} (tentativa ${attempts})`);
+      break;
     } catch (error) {
-      console.error('Erro ao conectar no canal de voz:', error);
+      console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
       connection.destroy();
-      queue.playing = false;
-      await queue.textChannel.send('❌ Não consegui entrar no canal de voz.');
-      return;
-    }
 
-    connection.subscribe(queue.player);
+      if (attempts >= maxAttempts) {
+        queue.playing = false;
+        await queue.textChannel.send('❌ **Não consegui entrar no canal de voz depois de 3 tentativas.**\nVerifique se eu tenho permissão de **Conectar** e **Falar** nesse canal.');
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
   }
 
+  connection.subscribe(queue.player);
   playNext(guildId);
 }
 
@@ -235,9 +244,7 @@ async function playNext(guildId) {
   queue.playing = true;
 
   try {
-    const stream = await play.stream(song.url, {
-      quality: 2 // alta qualidade
-    });
+    const stream = await play.stream(song.url, { quality: 2 });
 
     const resource = createAudioResource(stream.stream, {
       inputType: stream.type,
@@ -252,7 +259,7 @@ async function playNext(guildId) {
   } catch (error) {
     console.error(`Erro ao tocar ${song.title}:`, error);
     await queue.textChannel.send(`❌ Erro ao tocar: **${song.title}** (pulando...)`);
-    playNext(guildId); // tenta a próxima
+    playNext(guildId);
   }
 }
 
@@ -329,12 +336,8 @@ function setVolume(message, value) {
   }
 
   queue.volume = volume;
-
-  // Aplica no som atual se estiver tocando
   const resource = queue.player.state?.resource;
-  if (resource?.volume) {
-    resource.volume.setVolume(volume / 100);
-  }
+  if (resource?.volume) resource.volume.setVolume(volume / 100);
 
   message.reply(`🔊 Volume definido para **${volume}%**`);
 }
