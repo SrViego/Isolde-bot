@@ -58,8 +58,13 @@ function getUserData(data, guildId, userId) {
       points: 0,
       xp: 0,
       level: 1,
-      lastXpAt: 0
+      lastXpAt: 0,
+      inventory: {}
     };
+  }
+
+  if (!guildData.users[userId].inventory) {
+    guildData.users[userId].inventory = {};
   }
 
   return guildData.users[userId];

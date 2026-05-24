@@ -41,13 +41,21 @@ No Discord Developer Portal, ative `Message Content Intent` e `Server Members In
 ## Musica
 
 ```txt
-!play link_do_youtube
+!play link_ou_nome_da_musica
+!p link_ou_nome_da_musica
 !queue
+!fila
+!np
+!tocando
+!pause
+!resume
+!continuar
 !skip
 !stop
+!volume 1-100
 ```
 
-Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube. O bot precisa das permissoes `Ver canal`, `Conectar` e `Falar`.
+Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube ou uma busca por texto. O bot precisa das permissoes `Ver canal`, `Conectar` e `Falar`.
 
 ## Boas-vindas e Despedida
 
@@ -81,6 +89,32 @@ Pontos:
 !pontos @usuario
 !rankpontos
 ```
+
+## Loja de Pontos
+
+Itens atuais:
+
+```txt
+cafe - 50 pontos
+amuleto - 150 pontos
+mapa - 250 pontos
+coroa - 750 pontos
+```
+
+Comandos:
+
+```txt
+!loja
+!shop
+!comprar id_do_item
+!buy id_do_item
+!inventario
+!inventario @usuario
+!inv
+!usar id_do_item
+```
+
+As compras usam os pontos do sistema de pontos e ficam salvas no inventario do usuario.
 
 XP por mensagem:
 
