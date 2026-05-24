@@ -55,7 +55,16 @@ No Discord Developer Portal, ative `Message Content Intent` e `Server Members In
 !volume 1-100
 ```
 
-Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube ou uma busca por texto. O bot precisa das permissoes `Ver canal`, `Conectar` e `Falar`.
+Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube ou uma busca por texto. O bot usa **youtubei.js** (API InnerTube) para resolver e transmitir audio; precisa de **ffmpeg** no PATH para o `@discordjs/voice` transcodificar o stream. Permissoes: `Ver canal`, `Conectar` e `Falar`.
+
+Testes locais (sem Discord):
+
+```sh
+node scripts/test-music-resolve.js "https://youtu.be/tq0tUo0e1b8"
+node scripts/test-music-stream.js "https://youtu.be/tq0tUo0e1b8"
+```
+
+Cookie opcional no `.env` (`YT_COOKIE`) se alguns videos falharem.
 
 ## Boas-vindas e Despedida
 

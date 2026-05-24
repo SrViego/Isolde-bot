@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { Client, Events, GatewayIntentBits } = require('discord.js');
 const { generateDependencyReport } = require('@discordjs/voice');
 const { loadData } = require('./systems/database');
@@ -7,7 +9,6 @@ const { handleShopCommand } = require('./systems/shop');
 const { addXpFromMessage, handleXpCommand } = require('./systems/xp');
 const { handleModerationCommand } = require('./systems/moderation');
 const { handleMusicCommand } = require('./systems/music');
-require('dotenv').config();
 
 const token = process.env.DISCORD_TOKEN;
 const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
@@ -79,6 +80,10 @@ async function getTextChannel(guild, channelId) {
   await sodium.ready;
   console.log('[voice] libsodium pronto');
   console.log(generateDependencyReport());
+
+  if (process.env.YT_COOKIE?.trim()) {
+    console.log('[youtube] YT_COOKIE definido (youtubei.js)');
+  }
 
   await client.login(token);
 })().catch((err) => {

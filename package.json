@@ -14,7 +14,7 @@
     "dotenv": "^16.4.5",
     "libsodium-wrappers": "^0.7.16",
     "opusscript": "^0.1.1",
-    "play-dl": "^1.9.7"
+    "youtubei.js": "^17.0.1"
   },
   "engines": {
     "node": ">=18"

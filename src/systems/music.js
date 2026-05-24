@@ -1,3 +1,4 @@
+const { Readable } = require('node:stream');
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -8,8 +9,8 @@ const {
   getVoiceConnection,
   StreamType
 } = require('@discordjs/voice');
-const play = require('play-dl');
 const { PermissionFlagsBits } = require('discord.js');
+const { getInnertube } = require('./youtube');
 
 const MUSIC_COMMANDS = [
   '!play',
@@ -28,6 +29,15 @@ const MUSIC_COMMANDS = [
 
 /** @type {Map<string, object>} */
 const guildQueues = new Map();
+
+const YT_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+const YT_URL_ID_RE =
+  /(?:youtube\.com\/watch\?[^#]*?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
+
+const DOWNLOAD_OPTIONS = { type: 'audio', quality: 'best', format: 'any' };
+
+const ERR_NO_AUDIO_FORMAT =
+  'Não consegui obter áudio deste vídeo. O YouTube pode estar bloqueando o bot ou o vídeo não permite reprodução. Tenta outro link.';
 
 function patchVoiceConnection(connection) {
   if (connection.__isoldePatched) return;
@@ -85,6 +95,112 @@ function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+const INVALID_VIDEO_IDS = new Set(['undefined', 'null', '']);
+
+/** @returns {string | null} */
+function extractYoutubeVideoId(source) {
+  if (!source) return null;
+
+  if (typeof source === 'string') {
+    const trimmed = source.trim();
+    if (!trimmed) return null;
+    if (YT_VIDEO_ID_RE.test(trimmed)) return trimmed;
+    const match = trimmed.match(YT_URL_ID_RE);
+    return match?.[1] ?? null;
+  }
+
+  const id = source.video_id ?? source.videoId ?? source.id;
+  if (typeof id === 'string' && YT_VIDEO_ID_RE.test(id.trim())) {
+    return id.trim();
+  }
+
+  const candidate = source.url ?? source.link;
+  if (typeof candidate === 'string' && candidate.trim()) {
+    return extractYoutubeVideoId(candidate);
+  }
+
+  return null;
+}
+
+/** @returns {string | null} */
+function youtubeWatchUrl(source) {
+  const videoId = extractYoutubeVideoId(source);
+  if (!videoId || INVALID_VIDEO_IDS.has(videoId)) {
+    return null;
+  }
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+function isValidTrackUrl(url) {
+  if (typeof url !== 'string' || !url.startsWith('http')) return false;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.includes('youtube.com') && parsed.hostname !== 'youtu.be') {
+      return false;
+    }
+    const videoId = extractYoutubeVideoId(url);
+    return Boolean(videoId && !INVALID_VIDEO_IDS.has(videoId));
+  } catch {
+    return false;
+  }
+}
+
+function isYoutubeVideoInput(query) {
+  const trimmed = query.trim();
+  if (YT_VIDEO_ID_RE.test(trimmed)) return true;
+  return isValidTrackUrl(trimmed);
+}
+
+function trackFromVideoInfo(info) {
+  const details = info.basic_info;
+  const videoId = details.id ?? extractYoutubeVideoId(details.url_canonical);
+  const trackUrl = youtubeWatchUrl(videoId);
+
+  if (!trackUrl || !videoId) {
+    throw new Error('Não consegui obter a URL de reprodução desta faixa.');
+  }
+
+  return {
+    title: details.title ?? 'Sem título',
+    url: trackUrl,
+    videoId,
+    videoInfo: info,
+    duration: details.duration ?? 0,
+    durationLabel: formatDuration(details.duration)
+  };
+}
+
+async function searchFirstVideoId(query) {
+  const yt = await getInnertube();
+  const search = await yt.search(query, { type: 'video' });
+  const hit = search.videos?.[0];
+  const videoId = hit?.video_id ?? hit?.id;
+  if (!videoId || INVALID_VIDEO_IDS.has(videoId)) {
+    throw new Error(`Não achei nada para **${query}**.`);
+  }
+  return videoId;
+}
+
+async function createStreamForTrack(track) {
+  console.log('[music] stream url:', track?.url);
+
+  if (!track?.videoId && !isValidTrackUrl(track?.url)) {
+    throw new Error(`URL inválida para stream: ${track?.url}`);
+  }
+
+  let info = track.videoInfo;
+  if (!info) {
+    const yt = await getInnertube();
+    const videoId = track.videoId ?? extractYoutubeVideoId(track.url);
+    info = await yt.getInfo(videoId);
+    track.videoInfo = info;
+  }
+
+  const webStream = await info.download(DOWNLOAD_OPTIONS);
+  const nodeStream = Readable.fromWeb(webStream);
+  return { stream: nodeStream, type: 'arbitrary' };
 }
 
 function memberVoiceChannel(message) {
@@ -155,26 +271,20 @@ async function resolveTrack(query) {
     throw new Error('Me passa um link ou o nome da música, idiota.');
   }
 
-  const validation = play.yt_validate(trimmed);
-  let url = trimmed;
+  let videoId = null;
 
-  if (validation !== 'video') {
-    const results = await play.search(trimmed, { limit: 1, source: { youtube: 'video' } });
-    if (!results?.length) {
-      throw new Error(`Não achei nada para **${trimmed}**.`);
+  if (isYoutubeVideoInput(trimmed)) {
+    videoId = extractYoutubeVideoId(trimmed);
+    if (!videoId) {
+      throw new Error('Link ou ID do YouTube inválido.');
     }
-    url = results[0].url;
+  } else {
+    videoId = await searchFirstVideoId(trimmed);
   }
 
-  const info = await play.video_info(url);
-  const details = info.video_details;
-
-  return {
-    title: details.title ?? 'Sem título',
-    url: details.url,
-    duration: details.durationInSec ?? 0,
-    durationLabel: formatDuration(details.durationInSec)
-  };
+  const yt = await getInnertube();
+  const info = await yt.getInfo(videoId);
+  return trackFromVideoInfo(info);
 }
 
 function setupPlayerHandlers(guildId) {
@@ -207,17 +317,35 @@ async function playNext(guildId) {
   queue.playing = true;
   queue.current = track;
 
+  if (!track?.videoId && !isValidTrackUrl(track?.url)) {
+    console.error('[music] track missing valid url:', track?.title, track?.url);
+    await notifyQueueChannel(
+      queue,
+      `❌ **${track?.title ?? 'Faixa'}** sem URL válida. Pulando...`
+    );
+    return playNext(guildId);
+  }
+
   let streamData;
   try {
-    streamData = await play.stream(track.url);
+    streamData = await createStreamForTrack(track);
   } catch (err) {
-    console.error('[music] stream error:', err);
-    await notifyQueueChannel(queue, `❌ Erro ao tocar **${track.title}**. Pulando...`);
+    console.error('[music] stream error:', err, 'url:', track?.url);
+    const detail =
+      err?.message?.includes('formato') ||
+      err?.message?.includes('áudio') ||
+      err?.message?.includes('reprodução')
+        ? err.message
+        : `${ERR_NO_AUDIO_FORMAT}`;
+    await notifyQueueChannel(
+      queue,
+      `❌ Erro ao tocar **${track.title}**: ${detail} Pulando...`
+    );
     return playNext(guildId);
   }
 
   const resource = createAudioResource(streamData.stream, {
-    inputType: streamData.type === 'opus' ? StreamType.OggOpus : StreamType.Arbitrary,
+    inputType: StreamType.Arbitrary,
     inlineVolume: true
   });
 
@@ -447,4 +575,11 @@ async function handleMusicCommand(message) {
   return false;
 }
 
-module.exports = { handleMusicCommand };
+module.exports = {
+  handleMusicCommand,
+  resolveTrack,
+  youtubeWatchUrl,
+  isValidTrackUrl,
+  extractYoutubeVideoId,
+  createStreamForTrack
+};
