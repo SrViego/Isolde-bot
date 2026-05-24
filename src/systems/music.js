@@ -136,6 +136,13 @@ async function getVoicePermissionError(message, voiceChannel) {
 
   const permissions = voiceChannel.permissionsFor(botMember);
 
+  console.log(`🔍 DEBUG PERMISSÕES - Canal: ${voiceChannel.name}`);
+  console.log(`   Bot tem ADMINISTRADOR? → ${permissions.has(PermissionsBitField.Flags.Administrator)}`);
+  console.log(`   Pode Ver Canal?      → ${permissions.has(PermissionsBitField.Flags.ViewChannel)}`);
+  console.log(`   Pode Conectar?       → ${permissions.has(PermissionsBitField.Flags.Connect)}`);
+  console.log(`   Pode Falar?          → ${permissions.has(PermissionsBitField.Flags.Speak)}`);
+  console.log(`   Cargo mais alto do bot: ${botMember.roles.highest.name} (posição ${botMember.roles.highest.position})`);
+
   if (!permissions?.has(PermissionsBitField.Flags.ViewChannel)) {
     return 'Não tenho permissão para **ver** esse canal de voz.';
   }
@@ -181,10 +188,9 @@ function getOrCreateQueue(guildId, textChannel) {
 
 async function startPlaying(guildId, voiceChannel, queue) {
   let connection = getVoiceConnection(guildId);
-
   if (connection) {
     connection.destroy();
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(r => setTimeout(r, 800));
   }
 
   let attempts = 0;
@@ -192,6 +198,7 @@ async function startPlaying(guildId, voiceChannel, queue) {
 
   while (attempts < maxAttempts) {
     attempts++;
+    console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de entrar no canal ${voiceChannel.name}`);
 
     connection = joinVoiceChannel({
       channelId: voiceChannel.id,
@@ -204,19 +211,18 @@ async function startPlaying(guildId, voiceChannel, queue) {
 
     try {
       await entersState(connection, VoiceConnectionStatus.Ready, 60_000);
-      console.log(`✅ Conectado com sucesso no canal: ${voiceChannel.name} (tentativa ${attempts})`);
+      console.log(`✅ SUCESSO! Conectado no canal ${voiceChannel.name}`);
       break;
     } catch (error) {
-      console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
+      console.error(`❌ Tentativa ${attempts} falhou →`, error);
       connection.destroy();
 
       if (attempts >= maxAttempts) {
         queue.playing = false;
-        await queue.textChannel.send('❌ **Não consegui entrar no canal de voz depois de 3 tentativas.**\nVerifique se eu tenho permissão de **Conectar** e **Falar** nesse canal.');
+        await queue.textChannel.send('❌ **Não consegui entrar no canal depois de 3 tentativas.**\n\nMe manda o console completo do VSCode agora!');
         return;
       }
-
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(r => setTimeout(r, 2000));
     }
   }
 
