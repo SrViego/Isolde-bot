@@ -8,15 +8,11 @@
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.19.2",
-    "@snazzah/davey": "^0.1.11",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
-    "libsodium-wrappers": "^0.7.16",
-    "opusscript": "^0.1.1",
-    "youtubei.js": "^17.0.1"
+    "lavalink-client": "^2.5.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   }
 }

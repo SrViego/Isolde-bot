@@ -1,14 +1,13 @@
-require('dotenv').config();
+require("dotenv").config();
 
-const { Client, Events, GatewayIntentBits } = require('discord.js');
-const { generateDependencyReport } = require('@discordjs/voice');
-const { loadData } = require('./systems/database');
-const { handleMarriageCommand } = require('./systems/marriage');
-const { handlePointsCommand } = require('./systems/points');
-const { handleShopCommand } = require('./systems/shop');
-const { addXpFromMessage, handleXpCommand } = require('./systems/xp');
-const { handleModerationCommand } = require('./systems/moderation');
-const { handleMusicCommand } = require('./systems/music');
+const { Client, Events, GatewayIntentBits } = require("discord.js");
+const { loadData } = require("./systems/database");
+const { handleMarriageCommand } = require("./systems/marriage");
+const { handlePointsCommand } = require("./systems/points");
+const { handleShopCommand } = require("./systems/shop");
+const { addXpFromMessage, handleXpCommand } = require("./systems/xp");
+const { handleModerationCommand } = require("./systems/moderation");
+const { handleLavalinkRawData, handleMusicCommand, initLavalink } = require("./systems/music");
 
 const token = process.env.DISCORD_TOKEN;
 const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
@@ -16,7 +15,7 @@ const goodbyeChannelId = process.env.GOODBYE_CHANNEL_ID;
 const data = loadData();
 
 if (!token) {
-  console.error('Erro: coloque o token do bot no arquivo .env como DISCORD_TOKEN=seu_token');
+  console.error("Erro: coloque o token do bot no arquivo .env como DISCORD_TOKEN=seu_token");
   process.exit(1);
 }
 
@@ -30,8 +29,13 @@ const client = new Client({
   ]
 });
 
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Bot online como ${readyClient.user.tag}`);
+  await initLavalink(readyClient);
+});
+
+client.on("raw", (packet) => {
+  handleLavalinkRawData(client, packet);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -53,8 +57,8 @@ client.on(Events.MessageCreate, async (message) => {
 
   addXpFromMessage(message, data);
 
-  if (message.content === '!ping') {
-    await message.reply('Pong!');
+  if (message.content === "!ping") {
+    await message.reply("Pong!");
     return;
   }
 
@@ -76,17 +80,8 @@ async function getTextChannel(guild, channelId) {
 }
 
 (async () => {
-  const sodium = require('libsodium-wrappers');
-  await sodium.ready;
-  console.log('[voice] libsodium pronto');
-  console.log(generateDependencyReport());
-
-  if (process.env.YT_COOKIE?.trim()) {
-    console.log('[youtube] YT_COOKIE definido (youtubei.js)');
-  }
-
   await client.login(token);
 })().catch((err) => {
-  console.error('Falha ao iniciar o bot:', err);
+  console.error("Falha ao iniciar o bot:", err);
   process.exit(1);
 });

@@ -55,16 +55,20 @@ No Discord Developer Portal, ative `Message Content Intent` e `Server Members In
 !volume 1-100
 ```
 
-Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube ou uma busca por texto. O bot usa **youtubei.js** (API InnerTube) para resolver e transmitir audio; precisa de **ffmpeg** no PATH para o `@discordjs/voice` transcodificar o stream. Permissoes: `Ver canal`, `Conectar` e `Falar`.
+Para usar musica, entre em um canal de voz e envie `!play` com um link do YouTube ou uma busca por texto. O bot usa **Lavalink** para resolver e transmitir audio. Permissoes: `Ver canal`, `Conectar` e `Falar`.
 
-Testes locais (sem Discord):
+Antes de iniciar o bot, deixe um servidor Lavalink rodando e configure o `.env`:
 
-```sh
-node scripts/test-music-resolve.js "https://youtu.be/tq0tUo0e1b8"
-node scripts/test-music-stream.js "https://youtu.be/tq0tUo0e1b8"
+```env
+LAVALINK_HOST=127.0.0.1
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+LAVALINK_SECURE=false
+LAVALINK_SEARCH_SOURCE=ytmsearch
+LAVALINK_DEFAULT_VOLUME=80
 ```
 
-Cookie opcional no `.env` (`YT_COOKIE`) se alguns videos falharem.
+Para YouTube funcionar no Lavalink v4, use um plugin de source como `youtube-source` no servidor Lavalink. Deixei um exemplo em `lavalink/application.yml`; coloque esse arquivo na mesma pasta do `Lavalink.jar` antes de rodar o servidor.
 
 ## Boas-vindas e Despedida
 
