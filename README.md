@@ -140,7 +140,7 @@ XP por mensagem:
 
 O XP sobe automaticamente quando alguem conversa. Existe um intervalo de 60 segundos por usuario para evitar farm.
 
-## Moderacao
+## Moderação
 
 Comandos disponiveis:
 
